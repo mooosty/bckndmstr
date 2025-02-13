@@ -70,4 +70,20 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const adminAccess = request.cookies.get('adminAccess');
+    console.log('Verify - Admin access cookie:', adminAccess);
+
+    if (!adminAccess || adminAccess.value !== 'true') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Verify error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 } 

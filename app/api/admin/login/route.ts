@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,17 +24,30 @@ export async function POST(request: NextRequest) {
 
     console.log('Admin code verified, setting cookie');
     
+    // Get the domain from the request
+    const domain = request.headers.get('host') || '';
+    console.log('Setting cookie for domain:', domain);
+
     // Create the response
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ 
+      success: true,
+      message: 'Login successful'
+    });
     
     // Set the cookie with proper production settings
-    response.cookies.set('adminAccess', 'true', {
+    const cookieOptions = {
       httpOnly: true,
-      secure: true, // Always use secure in production
-      sameSite: 'lax', // Changed from strict to lax for better compatibility
+      secure: true,
+      sameSite: 'lax' as const,
       path: '/',
       maxAge: 24 * 60 * 60 // 24 hours
-    });
+    };
+
+    // Set the cookie
+    response.cookies.set('adminAccess', 'true', cookieOptions);
+    
+    // Log the response headers for debugging
+    console.log('Response headers:', response.headers.get('set-cookie'));
 
     return response;
   } catch (error) {

@@ -14,14 +14,27 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    
-    // Check for admin access
-    const adminAccess = document.cookie.includes('adminAccess=true');
-    if (!adminAccess) {
-      router.push('/admin');
-    }
-  }, [router]);
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          console.log('Auth check failed, redirecting to login');
+          window.location.href = '/admin';
+          return;
+        }
+        
+        setMounted(true);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        window.location.href = '/admin';
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   if (!mounted) {
     return null;
@@ -37,8 +50,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   ];
 
   const handleLogout = () => {
+    // Clear the admin access cookie
     document.cookie = 'adminAccess=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
-    router.push('/admin');
+    window.location.href = '/admin';
   };
 
   return (
