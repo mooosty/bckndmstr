@@ -6,8 +6,8 @@ export function middleware(request: NextRequest) {
   console.log('Middleware - URL:', request.url);
   console.log('Middleware - Cookies:', request.cookies.toString());
 
-  // Check if we're on an admin page
-  if (request.nextUrl.pathname.startsWith('/admin/dashboard')) {
+  // Check if we're on an admin/dashboard page
+  if (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/admin/dashboard')) {
     const adminAccess = request.cookies.get('adminAccess');
     console.log('Middleware - Admin access cookie:', adminAccess);
 
@@ -23,5 +23,6 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/admin/dashboard/:path*',
+    '/dashboard/:path*',
   ],
 }; 

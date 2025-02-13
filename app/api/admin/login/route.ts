@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     console.log('Admin code verified, setting cookie');
     
     // Get the domain from the request
-    const domain = request.headers.get('host') || '';
+    const domain = request.headers.get('host')?.split(':')[0] || '';
     console.log('Setting cookie for domain:', domain);
 
     // Create the response
@@ -35,16 +35,14 @@ export async function POST(request: NextRequest) {
     });
     
     // Set the cookie with proper production settings
-    const cookieOptions = {
+    response.cookies.set('adminAccess', 'true', {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax' as const,
+      sameSite: 'lax',
       path: '/',
-      maxAge: 24 * 60 * 60 // 24 hours
-    };
-
-    // Set the cookie
-    response.cookies.set('adminAccess', 'true', cookieOptions);
+      maxAge: 24 * 60 * 60, // 24 hours
+      domain: domain.includes('localhost') ? undefined : domain
+    });
     
     // Log the response headers for debugging
     console.log('Response headers:', response.headers.get('set-cookie'));

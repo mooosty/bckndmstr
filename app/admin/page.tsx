@@ -33,7 +33,7 @@ export default function AdminLoginPage() {
 
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      window.location.href = '/admin/dashboard';
+      window.location.href = '/dashboard';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login');
     } finally {

@@ -43,10 +43,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const isActive = (path: string) => pathname === path;
 
   const navigation = [
-    { name: 'Overview', path: '/admin/dashboard' },
-    { name: 'Projects', path: '/admin/dashboard/projects' },
-    { name: 'Tasks', path: '/admin/dashboard/tasks' },
-    { name: 'Applications', path: '/admin/dashboard/applications' },
+    { name: 'Overview', path: '/dashboard' },
+    { name: 'Projects', path: '/dashboard/projects' },
+    { name: 'Tasks', path: '/dashboard/tasks' },
+    { name: 'Applications', path: '/dashboard/applications' },
   ];
 
   const handleLogout = () => {
