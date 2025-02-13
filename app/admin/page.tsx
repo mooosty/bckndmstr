@@ -22,6 +22,7 @@ export default function AdminLoginPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ adminCode: password }),
+        credentials: 'include',
       });
 
       const data = await response.json();
@@ -30,9 +31,9 @@ export default function AdminLoginPage() {
         throw new Error(data.error || 'Failed to login');
       }
 
-      // Set admin cookie/session
-      document.cookie = `adminAccess=true; path=/`;
-      router.push('/admin/dashboard');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      window.location.href = '/admin/dashboard';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login');
     } finally {

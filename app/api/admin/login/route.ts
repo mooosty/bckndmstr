@@ -25,12 +25,15 @@ export async function POST(request: NextRequest) {
 
     console.log('Admin code verified, setting cookie');
     
-    // Set admin cookie
+    // Create the response
     const response = NextResponse.json({ success: true });
-    cookies().set('adminAccess', 'true', {
+    
+    // Set the cookie with proper production settings
+    response.cookies.set('adminAccess', 'true', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true, // Always use secure in production
+      sameSite: 'lax', // Changed from strict to lax for better compatibility
+      path: '/',
       maxAge: 24 * 60 * 60 // 24 hours
     });
 
