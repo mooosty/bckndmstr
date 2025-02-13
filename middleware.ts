@@ -6,14 +6,25 @@ export function middleware(request: NextRequest) {
   console.log('Middleware - URL:', request.url);
   console.log('Middleware - Cookies:', request.cookies.toString());
 
-  // Check if we're on an admin/dashboard page
-  if (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/admin/dashboard')) {
+  const { pathname } = request.nextUrl;
+
+  // Check if we're on an admin page
+  if (pathname.startsWith('/admin/dashboard')) {
     const adminAccess = request.cookies.get('adminAccess');
     console.log('Middleware - Admin access cookie:', adminAccess);
 
     if (!adminAccess || adminAccess.value !== 'true') {
       console.log('Middleware - No valid admin access, redirecting to login');
       return NextResponse.redirect(new URL('/admin', request.url));
+    }
+  }
+
+  // Check if we're on a user dashboard page
+  if (pathname.startsWith('/dashboard')) {
+    // Add your user authentication check here if needed
+    const adminAccess = request.cookies.get('adminAccess');
+    if (!adminAccess || adminAccess.value !== 'true') {
+      return NextResponse.redirect(new URL('/login', request.url));
     }
   }
 
