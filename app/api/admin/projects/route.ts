@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import Project from '@/models/Project';
+import Project from '@/src/models/Project';
+import { Types } from 'mongoose';
+
+interface ProjectDocument {
+  _id: Types.ObjectId;
+  title: string;
+  description: string;
+  status: string;
+  imageUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,19 +23,17 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
     
-    // Fetch all projects
-    const projects = await Project.find({})
-      .sort({ createdAt: -1 })
-      .select('title description status createdAt')
-      .lean();
+    const projects = await Project.find({});
 
     // Transform projects for response
-    const transformedProjects = projects.map(project => ({
+    const transformedProjects = projects.map((project: ProjectDocument) => ({
       id: project._id.toString(),
       title: project.title,
       description: project.description,
       status: project.status,
-      createdAt: project.createdAt,
+      imageUrl: project.imageUrl,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString()
     }));
 
     return NextResponse.json({
@@ -33,10 +42,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching projects:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch projects' },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to fetch projects' 
+    }, { status: 500 });
   }
 }
 
