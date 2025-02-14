@@ -21,11 +21,9 @@ export function middleware(request: NextRequest) {
 
   // Check if we're on a user dashboard page
   if (pathname.startsWith('/dashboard')) {
-    // Add your user authentication check here if needed
-    const adminAccess = request.cookies.get('adminAccess');
-    if (!adminAccess || adminAccess.value !== 'true') {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+    // For user dashboard pages, we'll let Dynamic Labs handle the authentication
+    // in the client-side components
+    return NextResponse.next();
   }
 
   return NextResponse.next();

@@ -23,6 +23,17 @@ export default function ProjectsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  // Static ChronoForge project
+  const staticProject: Project = {
+    id: 'chronoforge-1',
+    title: 'ChronoForge',
+    description: 'ChronoForge is a Web3 multiplayer RPG with hack-and-slash combat, player-driven governance, and time-travel adventures',
+    imageUrl: 'https://i.postimg.cc/jjrfn6Wk/photo-2025-02-14-01-42-38.jpg',
+    status: 'COMING_SOON',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -49,13 +60,16 @@ export default function ProjectsPage() {
         console.log('API Response:', data);
         
         if (data.success) {
-          console.log('Projects data:', data.data);
-          setProjects(data.data);
+          // Combine static project with fetched projects
+          const allProjects = [staticProject, ...data.data];
+          setProjects(allProjects);
         } else {
           throw new Error(data.error || 'Failed to fetch projects');
         }
       } catch (err) {
         console.error('Error fetching projects:', err);
+        // If API fails, at least show the static project
+        setProjects([staticProject]);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
