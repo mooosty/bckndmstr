@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Project, { IProject } from '@/src/models/Project';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
+
+interface ProjectDocument extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  overview: {
+    description: string;
+  };
+  coverImage: string;
+  status: string;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,7 +40,7 @@ export async function GET(request: NextRequest) {
     const projects = await Project.find().sort({ createdAt: -1 });
 
     // Transform projects for response
-    const transformedProjects = projects.map((project) => {
+    const transformedProjects = projects.map((project: ProjectDocument) => {
       const doc = project.toObject();
       return {
         id: doc._id.toString(),
@@ -93,21 +106,22 @@ export async function POST(request: NextRequest) {
       status: data.status || 'COMING_SOON',
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    }) as ProjectDocument;
 
+    const doc = project.toObject();
     return NextResponse.json({
       success: true,
       data: {
-        id: project._id.toString(),
-        name: project.name,
+        id: doc._id.toString(),
+        name: doc.name,
         overview: {
-          description: project.overview.description
+          description: doc.overview.description
         },
-        coverImage: project.coverImage,
-        status: project.status,
-        tags: project.tags,
-        createdAt: project.createdAt.toISOString(),
-        updatedAt: project.updatedAt.toISOString()
+        coverImage: doc.coverImage,
+        status: doc.status,
+        tags: doc.tags,
+        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString()
       }
     });
   } catch (error) {
