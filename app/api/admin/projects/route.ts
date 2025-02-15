@@ -27,18 +27,21 @@ export async function GET(request: NextRequest) {
     const projects = await Project.find().sort({ createdAt: -1 });
 
     // Transform projects for response
-    const transformedProjects = projects.map((project: Document & IProject) => ({
-      id: project._id.toString(),
-      name: project.name,
-      overview: {
-        description: project.overview.description
-      },
-      coverImage: project.coverImage,
-      status: project.status,
-      tags: project.tags,
-      createdAt: project.createdAt.toISOString(),
-      updatedAt: project.updatedAt.toISOString()
-    }));
+    const transformedProjects = projects.map((project) => {
+      const doc = project.toObject();
+      return {
+        id: doc._id.toString(),
+        name: doc.name,
+        overview: {
+          description: doc.overview.description
+        },
+        coverImage: doc.coverImage,
+        status: doc.status,
+        tags: doc.tags,
+        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString()
+      };
+    });
 
     return NextResponse.json({
       success: true,
