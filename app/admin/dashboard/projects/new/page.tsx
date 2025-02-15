@@ -142,27 +142,23 @@ export default function NewProjectPage() {
       // Log the form data being sent
       console.log('Submitting form data:', JSON.stringify(formData, null, 2));
 
-      // Validate required nested fields
-      const requiredFields = [
-        ['name'],
-        ['coverImage'],
-        ['overview', 'description'],
-        ['nftDetails', 'title'],
-        ['nftDetails', 'description'],
-        ['mintDetails', 'chain'],
-        ['mintDetails', 'supply'],
-        ['mintDetails', 'mintDate']
+      // Validate required fields
+      const requiredValidations: [string, boolean][] = [
+        ['name', !formData.name],
+        ['coverImage', !formData.coverImage],
+        ['overview description', !formData.overview.description],
+        ['NFT title', !formData.nftDetails.title],
+        ['NFT description', !formData.nftDetails.description],
+        ['mint chain', !formData.mintDetails.chain],
+        ['mint supply', !formData.mintDetails.supply],
+        ['mint date', !formData.mintDetails.mintDate]
       ];
 
-      for (const fieldPath of requiredFields) {
-        let value = formData;
-        for (const key of fieldPath) {
-          value = value[key];
-          if (!value) {
-            setError(`${fieldPath.join('.')} is required`);
-            setLoading(false);
-            return;
-          }
+      for (const [fieldName, isInvalid] of requiredValidations) {
+        if (isInvalid) {
+          setError(`${fieldName} is required`);
+          setLoading(false);
+          return;
         }
       }
 
