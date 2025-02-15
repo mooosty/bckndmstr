@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Project, { IProject } from '@/src/models/Project';
+import { Document } from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     const projects = await Project.find().sort({ createdAt: -1 });
 
     // Transform projects for response
-    const transformedProjects = projects.map((project) => ({
+    const transformedProjects = projects.map((project: Document & IProject) => ({
       id: project._id.toString(),
       name: project.name,
       overview: {
@@ -54,17 +55,29 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Check admin access
-    const adminAccess = request.cookies.get('adminAccess');
-    if (!adminAccess || adminAccess.value !== 'true') {
+    const adminAccess = request.cookies.get('adminAccess')?.value;
+    if (!adminAccess || adminAccess !== 'true') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const body = await request.json();
+    // Check for authorization header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Verify admin email
+    const adminEmail = authHeader.split(' ')[1];
+    if (adminEmail !== 'admin@darknightlabs.com') {
+      return NextResponse.json({ error: 'Invalid admin credentials' }, { status: 401 });
+    }
+
+    const data = await request.json();
 
     // Validate required fields
-    if (!body.title || !body.description) {
+    if (!data.name || !data.overview?.description) {
       return NextResponse.json(
-        { error: 'Title and description are required' },
+        { error: 'Name and overview description are required' },
         { status: 400 }
       );
     }
@@ -73,8 +86,8 @@ export async function POST(request: NextRequest) {
 
     // Create new project
     const project = await Project.create({
-      ...body,
-      status: body.status || 'DRAFT',
+      ...data,
+      status: data.status || 'COMING_SOON',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -83,10 +96,15 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         id: project._id.toString(),
-        title: project.title,
-        description: project.description,
+        name: project.name,
+        overview: {
+          description: project.overview.description
+        },
+        coverImage: project.coverImage,
         status: project.status,
-        createdAt: project.createdAt,
+        tags: project.tags,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt.toISOString()
       }
     });
   } catch (error) {
