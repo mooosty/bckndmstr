@@ -197,3 +197,87 @@ body {
 .step-content p {
   @apply text-white/60 mb-6;
 }
+
+/* Custom styles for Ant Design components */
+.ant-table {
+  @apply rounded-lg overflow-hidden;
+}
+
+.ant-table-thead > tr > th {
+  @apply bg-gray-50 !important;
+  @apply text-gray-700 font-medium !important;
+  @apply border-b border-gray-200 !important;
+}
+
+.ant-table-tbody > tr > td {
+  @apply border-b border-gray-100 !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  @apply bg-gray-50 !important;
+}
+
+.ant-btn-primary {
+  @apply shadow-sm !important;
+}
+
+.ant-tabs-nav {
+  @apply mb-6 !important;
+}
+
+.ant-tabs-tab {
+  @apply text-gray-600 !important;
+}
+
+.ant-tabs-tab-active {
+  @apply text-blue-500 !important;
+}
+
+.ant-tabs-ink-bar {
+  @apply bg-blue-500 !important;
+}
+
+.ant-input-affix-wrapper {
+  @apply border border-gray-200 hover:border-blue-400 !important;
+}
+
+.ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  @apply border-blue-400 !important;
+}
+
+.ant-btn-primary:not(:disabled) {
+  @apply bg-blue-500 hover:bg-blue-600 border-none !important;
+}
+
+.ant-btn-primary:disabled {
+  @apply bg-gray-300 border-none !important;
+}
+
+.ant-tag {
+  @apply font-medium !important;
+}
+
+/* Status tag colors */
+.ant-tag-success {
+  @apply bg-green-50 text-green-600 border-green-200 !important;
+}
+
+.ant-tag-processing {
+  @apply bg-blue-50 text-blue-600 border-blue-200 !important;
+}
+
+.ant-tag-warning {
+  @apply bg-yellow-50 text-yellow-600 border-yellow-200 !important;
+}
+
+.ant-tag-purple {
+  @apply bg-purple-50 text-purple-600 border-purple-200 !important;
+}
+
+.ant-tag-blue {
+  @apply bg-blue-50 text-blue-600 border-blue-200 !important;
+}
+
+.ant-tag-gold {
+  @apply bg-yellow-50 text-yellow-600 border-yellow-200 !important;
+}

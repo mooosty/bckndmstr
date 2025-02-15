@@ -3,7 +3,7 @@ import dbConnect from '@/lib/db';
 import Project from '@/src/models/Project';
 import Task from '@/models/Task';
 import Application from '@/src/models/Application';
-import User from '@/app/models/User';
+import User from '@/src/models/User';
 
 export async function GET(request: NextRequest) {
   try {

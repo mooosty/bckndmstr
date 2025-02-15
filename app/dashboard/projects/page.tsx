@@ -6,10 +6,13 @@ import Link from 'next/link';
 
 interface Project {
   id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  status: 'COMING_SOON' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED';
+  name: string;
+  coverImage: string;
+  status: 'COMING_SOON' | 'LIVE' | 'ENDED';
+  overview: {
+    description: string;
+  };
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -22,17 +25,6 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-
-  // Static ChronoForge project
-  const staticProject: Project = {
-    id: 'chronoforge-1',
-    title: 'ChronoForge',
-    description: 'ChronoForge is a Web3 multiplayer RPG with hack-and-slash combat, player-driven governance, and time-travel adventures',
-    imageUrl: 'https://i.postimg.cc/jjrfn6Wk/photo-2025-02-14-01-42-38.jpg',
-    status: 'COMING_SOON',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
 
   useEffect(() => {
     setMounted(true);
@@ -60,16 +52,12 @@ export default function ProjectsPage() {
         console.log('API Response:', data);
         
         if (data.success) {
-          // Combine static project with fetched projects
-          const allProjects = [staticProject, ...data.data];
-          setProjects(allProjects);
+          setProjects(data.data);
         } else {
           throw new Error(data.error || 'Failed to fetch projects');
         }
       } catch (err) {
         console.error('Error fetching projects:', err);
-        // If API fails, at least show the static project
-        setProjects([staticProject]);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
@@ -86,19 +74,22 @@ export default function ProjectsPage() {
   }
 
   const filteredProjects = projects
+    .filter(project => {
+      const searchTermLower = searchTerm.toLowerCase();
+      const name = project?.name || '';
+      const description = project?.overview?.description || '';
+      
+      return name.toLowerCase().includes(searchTermLower) ||
+             description.toLowerCase().includes(searchTermLower);
+    })
     .filter(project => 
-      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .filter(project => 
-      statusFilter === 'all' ? true : project.status === statusFilter
+      statusFilter === 'all' ? true : project?.status === statusFilter
     );
 
   const statusColors = {
     'COMING_SOON': 'text-[#f5efdb] bg-[#f5efdb1a] border-[#f5efdb33]',
-    'OPEN': 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-    'IN_PROGRESS': 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-    'COMPLETED': 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    'LIVE': 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+    'ENDED': 'text-gray-400 bg-gray-400/10 border-gray-400/20'
   };
 
   return (
@@ -139,7 +130,7 @@ export default function ProjectsPage() {
 
             {/* Status Filter Pills */}
             <div className="flex flex-wrap gap-2">
-              {['all', 'COMING_SOON', 'OPEN', 'IN_PROGRESS', 'COMPLETED'].map((status) => (
+              {['all', 'COMING_SOON', 'LIVE', 'ENDED'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
@@ -201,8 +192,8 @@ export default function ProjectsPage() {
                 {/* Project Image with Overlay */}
                 <div className="relative aspect-video rounded-xl overflow-hidden mb-6">
                   <img
-                    src={project.imageUrl}
-                    alt={project.title}
+                    src={project.coverImage}
+                    alt={project.name}
                     className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-[1.02]"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -212,7 +203,7 @@ export default function ProjectsPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-start gap-4">
                     <h3 className="text-xl font-display text-[#f5efdb] group-hover:text-white transition-colors">
-                      {project.title}
+                      {project.name}
                     </h3>
                     <span className={`px-3 py-1 rounded-full text-sm border ${statusColors[project.status]}`}>
                       {project.status.replace('_', ' ')}
@@ -220,8 +211,22 @@ export default function ProjectsPage() {
                   </div>
 
                   <p className="text-[#f5efdb99] line-clamp-2 group-hover:text-[#f5efdb] transition-colors">
-                    {project.description}
+                    {project.overview.description}
                   </p>
+
+                  {/* Tags */}
+                  {project.tags && project.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {project.tags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 rounded-full text-xs bg-[#f5efdb1a] text-[#f5efdb99]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* View Details Button */}
                   <div className="pt-4 flex items-center justify-between">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userAuth, isAdmin } from '@/middleware/userAuth';
 import dbConnect from '@/lib/db';
-import User from '@/app/models/User';
+import User from '@/src/models/User';
 
 interface AuthResult {
   user: {

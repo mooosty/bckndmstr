@@ -1,7 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Button, Input, Select, Table, Tag, message, Space, Tabs, Typography } from 'antd';
+import { SearchOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+
+const { Title } = Typography;
+
+interface TaskProgress {
+  taskId: string;
+  projectId: string;
+  projectName: string;
+  userId: string;
+  userEmail: string;
+  title: string;
+  description: string;
+  type: string;
+  status: string;
+  points: number;
+  dueDate: string;
+  submission?: string;
+  completedAt?: Date;
+  subtasks?: {
+    subtaskId: string;
+    title: string;
+    completed: boolean;
+    required: boolean;
+  }[];
+}
 
 interface Task {
   id: string;
@@ -10,177 +36,387 @@ interface Task {
   projectId: string;
   projectTitle: string;
   deadline: string;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH';
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
-  createdAt: string;
-  updatedAt: string;
+  priority: string;
+  status: string;
+  points: number;
 }
 
-export default function TasksPage() {
+const TasksPage = () => {
+  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskProgress, setTaskProgress] = useState<TaskProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('1');
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await fetch('/api/tasks', {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [tasksResponse, progressResponse] = await Promise.all([
+        fetch('/api/tasks', {
           headers: {
             'Authorization': `Bearer admin@darknightlabs.com`
           }
-        });
+        }),
+        fetch('/api/admin/task-progress', {
+          headers: {
+            'Authorization': `Bearer admin@darknightlabs.com`
+          }
+        })
+      ]);
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch tasks');
-        }
-
-        const data = await response.json();
-        
-        if (data.success) {
-          setTasks(data.data);
-        } else {
-          throw new Error(data.error || 'Failed to fetch tasks');
-        }
-      } catch (err) {
-        console.error('Error fetching tasks:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
+      if (!tasksResponse.ok || !progressResponse.ok) {
+        throw new Error('Failed to fetch data');
       }
-    };
 
-    fetchTasks();
-  }, []);
+      const tasksData = await tasksResponse.json();
+      const progressData = await progressResponse.json();
 
-  const filteredTasks = tasks
-    .filter(task => 
+      setTasks(tasksData.data || []);
+      setTaskProgress(progressData.data || []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      message.error('Failed to fetch tasks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  const handleStatusFilter = (value: string) => {
+    setStatusFilter(value);
+  };
+
+  const handleApproveReject = async (taskId: string, projectId: string, userId: string, action: 'approve' | 'reject') => {
+    try {
+      const response = await fetch('/api/admin/task-progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer admin@darknightlabs.com`
+        },
+        body: JSON.stringify({
+          taskId,
+          projectId,
+          userId,
+          action
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task status');
+      }
+
+      message.success(`Task ${action}d successfully`);
+      fetchData(); // Refresh data
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Failed to update task status');
+    }
+  };
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = 
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .filter(task => 
-      statusFilter === 'all' ? true : task.status === statusFilter
-    );
+      task.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
-  const priorityColors = {
-    'LOW': 'text-blue-400 bg-blue-400/10',
-    'MEDIUM': 'text-yellow-400 bg-yellow-400/10',
-    'HIGH': 'text-red-400 bg-red-400/10'
-  };
+  const filteredProgress = taskProgress.filter(progress => {
+    const matchesSearch = 
+      progress.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      progress.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      progress.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || progress.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
-  const statusColors = {
-    'PENDING': 'text-yellow-400 bg-yellow-400/10',
-    'IN_PROGRESS': 'text-blue-400 bg-blue-400/10',
-    'COMPLETED': 'text-green-400 bg-green-400/10'
-  };
+  const taskColumns = [
+    {
+      title: 'Title',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text: string) => (
+        <span className="font-medium text-[#f5efdb]">{text}</span>
+      ),
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => (
+        <span className="text-[#f5efdb99]">{text}</span>
+      ),
+    },
+    {
+      title: 'Project',
+      dataIndex: 'projectTitle',
+      key: 'projectTitle',
+      render: (text: string) => (
+        <Tag className="text-sm bg-[#1a1a18] border-[#f5efdb1a] text-[#f5efdb]">
+          {text}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag
+          color={
+            status === 'completed' ? 'success' :
+            status === 'in_progress' ? 'processing' :
+            status === 'pending' ? 'warning' : 'default'
+          }
+          className="px-3 py-1"
+        >
+          {status.replace('_', ' ').toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Points',
+      dataIndex: 'points',
+      key: 'points',
+      render: (points: number) => (
+        <Tag color="gold" className="text-sm">
+          {points} pts
+        </Tag>
+      ),
+    },
+    {
+      title: 'Due Date',
+      dataIndex: 'deadline',
+      key: 'deadline',
+      render: (date: string) => (
+        <span className="text-gray-600">
+          {new Date(date).toLocaleDateString()}
+        </span>
+      ),
+    }
+  ];
+
+  const progressColumns = [
+    {
+      title: 'Title',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text: string) => (
+        <span className="font-medium text-gray-800">{text}</span>
+      ),
+    },
+    {
+      title: 'User',
+      dataIndex: 'userEmail',
+      key: 'userEmail',
+      render: (email: string) => (
+        <Tag color="purple" className="text-sm">
+          {email}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Project',
+      dataIndex: 'projectName',
+      key: 'projectName',
+      render: (text: string) => (
+        <Tag color="blue" className="text-sm">
+          {text}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag
+          color={
+            status === 'completed' ? 'success' :
+            status === 'in_progress' ? 'processing' :
+            status === 'pending' ? 'warning' : 'default'
+          }
+          className="px-3 py-1"
+        >
+          {status.toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Points',
+      dataIndex: 'points',
+      key: 'points',
+      render: (points: number) => (
+        <Tag color="gold" className="text-sm">
+          {points} pts
+        </Tag>
+      ),
+    },
+    {
+      title: 'Submission',
+      dataIndex: 'submission',
+      key: 'submission',
+      render: (text: string) => text ? (
+        <Button
+          type="link"
+          href={text}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 hover:text-blue-600"
+        >
+          View Submission
+        </Button>
+      ) : '-',
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: unknown, record: TaskProgress) => (
+        <Space>
+          <Button
+            type="primary"
+            icon={<CheckCircleOutlined />}
+            onClick={() => handleApproveReject(record.taskId, record.projectId, record.userId, 'approve')}
+            disabled={record.status === 'completed'}
+            className="bg-green-500 hover:bg-green-600 border-none"
+          >
+            Approve
+          </Button>
+          <Button
+            danger
+            icon={<CloseCircleOutlined />}
+            onClick={() => handleApproveReject(record.taskId, record.projectId, record.userId, 'reject')}
+            disabled={record.status === 'completed'}
+          >
+            Reject
+          </Button>
+        </Space>
+      ),
+    }
+  ];
+
+  const items = [
+    {
+      key: '1',
+      label: 'Tasks',
+      children: (
+        <Table
+          dataSource={filteredTasks}
+          columns={taskColumns}
+          loading={loading}
+          rowKey="id"
+          className="bg-[#2a2a28] rounded-lg shadow-lg [&_th]:!bg-[#1a1a18] [&_th]:!text-[#f5efdb] [&_td]:!border-[#f5efdb1a] [&_tr:hover>td]:!bg-[#1a1a18]"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `Total ${total} tasks`,
+            className: "text-[#f5efdb]"
+          }}
+        />
+      ),
+    },
+    {
+      key: '2',
+      label: 'Task Progress',
+      children: (
+        <Table
+          dataSource={filteredProgress}
+          columns={progressColumns}
+          loading={loading}
+          rowKey="taskId"
+          className="bg-[#2a2a28] rounded-lg shadow-lg [&_th]:!bg-[#1a1a18] [&_th]:!text-[#f5efdb] [&_td]:!border-[#f5efdb1a] [&_tr:hover>td]:!bg-[#1a1a18]"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `Total ${total} submissions`,
+            className: "text-[#f5efdb]"
+          }}
+        />
+      ),
+    }
+  ];
 
   return (
-    <div className="space-y-8">
-      {/* Header Section */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-display text-[#f5efdb]">Tasks</h1>
-        <Link
-          href="/admin/dashboard/tasks/new"
-          className="px-4 py-2 rounded-lg bg-[#f5efdb] text-[#2a2a28] hover:opacity-90 transition-all"
-        >
-          Create New Task
-        </Link>
-      </div>
+    <div className="min-h-screen bg-[#1a1a18] p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <Title level={2} className="!text-[#f5efdb] !mb-1">
+              Tasks Management
+            </Title>
+            <p className="text-[#f5efdb99]">
+              Manage and monitor all tasks and submissions
+            </p>
+          </div>
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlusOutlined />}
+            onClick={() => router.push('/admin/dashboard/tasks/new')}
+            className="bg-[#f5efdb] hover:bg-[#f5efdb]/90 text-[#1a1a18]"
+          >
+            Create New Task
+          </Button>
+        </div>
 
-      {/* Filters Section */}
-      <div className="rounded-xl p-4 backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a]">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search Input */}
-          <div className="flex-1">
-            <input
-              type="text"
+        <div className="bg-[#2a2a28] p-6 rounded-lg shadow-lg border border-[#f5efdb1a] space-y-6">
+          <div className="flex gap-4">
+            <Input
               placeholder="Search tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-[#2a2a2866] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
+              prefix={<SearchOutlined className="text-[#f5efdb99]" />}
+              onChange={e => handleSearch(e.target.value)}
+              className="max-w-md bg-[#1a1a18] border-[#f5efdb1a] text-[#f5efdb]"
+              size="large"
+            />
+            <Select
+              defaultValue="all"
+              style={{ width: 200 }}
+              onChange={handleStatusFilter}
+              size="large"
+              className="border-[#f5efdb1a]"
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'in_progress', label: 'In Progress' },
+                { value: 'completed', label: 'Completed' }
+              ]}
             />
           </div>
 
-          {/* Status Filter */}
-          <div className="flex flex-wrap gap-2">
-            {['all', 'PENDING', 'IN_PROGRESS', 'COMPLETED'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  statusFilter === status
-                    ? 'bg-[#f5efdb] text-[#2a2a28]'
-                    : 'border border-[#f5efdb1a] text-[#f5efdb] hover:bg-[#f5efdb1a]'
-                }`}
-              >
-                {status === 'all' ? 'All' : status.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
+          {error && (
+            <div className="bg-red-900/20 border border-red-500/20 text-red-400 px-4 py-3 rounded">
+              <p className="flex items-center">
+                <CloseCircleOutlined className="mr-2" />
+                {error}
+              </p>
+            </div>
+          )}
+
+          <Tabs
+            defaultActiveKey="1"
+            items={items}
+            onChange={key => setActiveTab(key)}
+            className="ant-tabs-custom [&_.ant-tabs-tab]:!text-[#f5efdb99] [&_.ant-tabs-tab-active]:!text-[#f5efdb]"
+          />
         </div>
       </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="rounded-xl p-4 bg-red-500/10 border border-red-500/20 text-red-500">
-          {error}
-        </div>
-      )}
-
-      {/* Tasks List */}
-      {loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((n) => (
-            <div key={n} className="animate-pulse rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6 h-[100px]" />
-          ))}
-        </div>
-      ) : tasks.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-[#f5efdb99]">No tasks available.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredTasks.map((task) => (
-            <div
-              key={task.id}
-              className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6 transition-all hover:bg-[#2a2a2855]"
-            >
-              <div className="flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-xl font-display text-[#f5efdb]">{task.title}</h3>
-                    <div className="flex gap-2">
-                      <span className={`px-3 py-1 rounded-full text-sm ${priorityColors[task.priority]}`}>
-                        {task.priority}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-sm ${statusColors[task.status]}`}>
-                        {task.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-[#f5efdb99] mb-2">{task.description}</p>
-                  <div className="flex items-center gap-4 text-sm text-[#f5efdb66]">
-                    <span>Project: {task.projectTitle}</span>
-                    <span>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/admin/dashboard/tasks/${task.id}`}
-                    className="px-4 py-2 rounded-lg border border-[#f5efdb1a] text-[#f5efdb] hover:bg-[#f5efdb1a] transition-all"
-                  >
-                    View Details
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
-} 
+};
+
+export default TasksPage; 

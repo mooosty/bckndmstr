@@ -1,27 +1,189 @@
 'use client';
  
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { Dialog } from '@headlessui/react';
- 
+import Link from 'next/link';
+
+interface Project {
+  id: string;
+  name: string;
+  coverImage: string;
+  status: 'COMING_SOON' | 'LIVE' | 'ENDED';
+  tags: string[];
+  overview: {
+    description: string;
+  };
+  nftDetails: {
+    title: string;
+    description: string;
+    features: string[];
+  };
+  mintDetails: {
+    chain: string;
+    supply: string;
+    mintDate: string;
+    phases: {
+      name: string;
+      duration: string;
+      time: string;
+    }[];
+  };
+  howToMint: {
+    steps: string[];
+  };
+  importantLinks: {
+    title: string;
+    url: string;
+    icon: string;
+  }[];
+  collaboration: {
+    enabled: boolean;
+    title: string;
+    description: string;
+    disabledMessage: string;
+  };
+  tasks: {
+    discord: {
+      title: string;
+      description: string;
+      tasks: {
+        id: string;
+        title: string;
+        description: string;
+        points: number;
+        dueDate: string;
+        subtasks?: {
+          id: string;
+          title: string;
+          required: boolean;
+        }[];
+      }[];
+      progress: number;
+    };
+    social: {
+      title: string;
+      description: string;
+      tasks: {
+        id: string;
+        title: string;
+        description: string;
+        points: number;
+        dueDate: string;
+      }[];
+      progress: number;
+    };
+  };
+}
+
+interface TaskProgress {
+  userId: string;
+  projectId: string;
+  tasks: {
+    taskId: string;
+    type: 'discord' | 'social';
+    status: 'pending' | 'pending_approval' | 'completed';
+    completedAt?: string;
+    submission?: string;
+    subtasks?: {
+      subtaskId: string;
+      completed: boolean;
+      completedAt?: string;
+    }[];
+  }[];
+  totalPoints: number;
+  completedTasks: number;
+}
+
+interface TaskProgressResponse {
+  discord?: {
+    tasks: Array<{
+      id: string;
+      progress?: {
+        status: 'pending' | 'completed';
+        completedAt?: string;
+        submission?: string;
+        subtasks?: Array<{
+          subtaskId: string;
+          completed: boolean;
+          completedAt?: string;
+        }>;
+      };
+      subtasks?: Array<{
+        id: string;
+      }>;
+    }>;
+  };
+  social?: {
+    tasks: Array<{
+      id: string;
+      progress?: {
+        status: 'pending' | 'completed';
+        completedAt?: string;
+        submission?: string;
+      };
+    }>;
+  };
+  totalPoints: number;
+  completedTasks: number;
+}
+
 interface TaskSubmissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   task: {
+    id: string;
     title: string;
     type: 'discord' | 'social';
     points: number;
   };
 }
  
-const TaskSubmissionModal = ({ isOpen, onClose, task }: TaskSubmissionModalProps) => {
+const TaskSubmissionModal = ({ isOpen, onClose, task, onTaskSubmitted }: TaskSubmissionModalProps & { onTaskSubmitted: (updatedProgress: TaskProgress) => void }) => {
   const [submission, setSubmission] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useDynamicContext();
+  const params = useParams();
  
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle submission logic here
-    console.log('Submitted:', { task, submission });
-    onClose();
+    setSubmitting(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.email}`
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          type: task.type,
+          submission: submission
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit task');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        onTaskSubmitted(data.data);
+        onClose();
+      } else {
+        throw new Error(data.error || 'Failed to submit task');
+      }
+    } catch (error) {
+      console.error('Error submitting task:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit task');
+    } finally {
+      setSubmitting(false);
+    }
   };
  
   return (
@@ -44,8 +206,12 @@ const TaskSubmissionModal = ({ isOpen, onClose, task }: TaskSubmissionModalProps
                 className="w-full px-4 py-2 rounded-lg bg-[#2a2a2866] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                 placeholder={task.type === 'discord' ? 'Enter your Discord username' : 'Paste your post link'}
                 required
+                disabled={submitting}
               />
             </div>
+            {error && (
+              <div className="text-red-500 text-sm">{error}</div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-yellow-400 text-sm">+{task.points} pts</span>
               <div className="space-x-2">
@@ -53,14 +219,16 @@ const TaskSubmissionModal = ({ isOpen, onClose, task }: TaskSubmissionModalProps
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2 rounded-lg border border-[#f5efdb1a] text-[#f5efdb] hover:bg-[#f5efdb1a]"
+                  disabled={submitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#f5efdb] text-[#2a2a28] hover:opacity-90"
+                  className="px-4 py-2 rounded-lg bg-[#f5efdb] text-[#2a2a28] hover:opacity-90 disabled:opacity-50"
+                  disabled={submitting}
                 >
-                  Submit
+                  {submitting ? 'Submitting...' : 'Submit'}
                 </button>
               </div>
             </div>
@@ -72,15 +240,226 @@ const TaskSubmissionModal = ({ isOpen, onClose, task }: TaskSubmissionModalProps
 };
  
 export default function ProjectDetailsPage() {
+  const { user } = useDynamicContext();
+  const params = useParams();
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<null | {
+    id: string;
     title: string;
     type: 'discord' | 'social';
     points: number;
   }>(null);
+  const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
  
-  const handleTaskClick = (task: { title: string; type: 'discord' | 'social'; points: number }) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.email || !params.projectId) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch project details
+        const projectResponse = await fetch(`/api/projects/${params.projectId}`, {
+          headers: {
+            'Authorization': `Bearer ${user.email}`
+          }
+        });
+
+        if (!projectResponse.ok) {
+          throw new Error('Failed to fetch project details');
+        }
+
+        const projectData = await projectResponse.json();
+        console.log('Project Data:', projectData);
+        
+        if (projectData.success) {
+          setProject(projectData.data);
+          
+          // Fetch task progress
+          const progressResponse = await fetch(`/api/projects/${params.projectId}/progress`, {
+            headers: {
+              'Authorization': `Bearer ${user.email}`
+            }
+          });
+
+          if (progressResponse.ok) {
+            const progressData = await progressResponse.json();
+            console.log('Progress Data:', progressData);
+            
+            if (progressData.success) {
+              const data = progressData.data as TaskProgressResponse;
+              
+              // Transform the data structure to match what the component expects
+              const transformedProgress: TaskProgress = {
+                userId: user.email,
+                projectId: params.projectId as string,
+                tasks: [
+                  ...(data.discord?.tasks || []).map((task: { id: string; progress?: { status: 'pending' | 'completed'; completedAt?: string; submission?: string; subtasks?: Array<{ subtaskId: string; completed: boolean; completedAt?: string; }>; }; subtasks?: Array<{ id: string; }>; }) => ({
+                    taskId: task.id,
+                    type: 'discord' as const,
+                    status: task.progress?.status || 'pending',
+                    completedAt: task.progress?.completedAt,
+                    submission: task.progress?.submission,
+                    subtasks: task.subtasks?.map((subtask: { id: string }) => ({
+                      subtaskId: subtask.id,
+                      completed: task.progress?.subtasks?.find((s: { subtaskId: string }) => s.subtaskId === subtask.id)?.completed || false,
+                      completedAt: task.progress?.subtasks?.find((s: { subtaskId: string }) => s.subtaskId === subtask.id)?.completedAt
+                    }))
+                  })),
+                  ...(data.social?.tasks || []).map((task: { id: string; progress?: { status: 'pending' | 'completed'; completedAt?: string; submission?: string; }; }) => ({
+                    taskId: task.id,
+                    type: 'social' as const,
+                    status: task.progress?.status || 'pending',
+                    completedAt: task.progress?.completedAt,
+                    submission: task.progress?.submission
+                  }))
+                ],
+                totalPoints: data.totalPoints || 0,
+                completedTasks: data.completedTasks || 0
+              };
+              
+              console.log('Transformed Progress:', transformedProgress);
+              setTaskProgress(transformedProgress);
+            }
+          }
+        } else {
+          throw new Error(projectData.error || 'Failed to fetch project details');
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, params.projectId]);
+
+  const handleTaskClick = (task: { 
+    id: string;
+    title: string; 
+    type: 'discord' | 'social'; 
+    points: number; 
+  }) => {
     setSelectedTask(task);
   };
+
+  const getTaskStatus = (taskId: string) => {
+    if (!taskProgress) return 'pending';
+    console.log('Task Progress:', taskProgress);
+    console.log('Looking for task:', taskId);
+    const task = taskProgress.tasks?.find(t => t.taskId === taskId);
+    console.log('Found task:', task);
+    return task?.status || 'pending';
+  };
+
+  const getSubtaskStatus = (taskId: string, subtaskId: string) => {
+    if (!taskProgress) return false;
+    const task = taskProgress.tasks?.find(t => t.taskId === taskId);
+    return task?.subtasks?.find(st => st.subtaskId === subtaskId)?.completed || false;
+  };
+
+  const getTaskStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return {
+          color: 'bg-green-500',
+          size: 'w-3 h-3',
+          tooltip: 'Completed'
+        };
+      case 'pending_approval':
+        return {
+          color: 'bg-yellow-500',
+          size: 'w-3 h-3',
+          tooltip: 'Pending Admin Approval'
+        };
+      default:
+        return {
+          color: 'bg-[#f5efdb33]',
+          size: 'w-2 h-2',
+          tooltip: 'Not Started'
+        };
+    }
+  };
+
+  const handleTaskSubmitted = (updatedProgress: TaskProgress) => {
+    setTaskProgress(updatedProgress);
+    // Update project progress percentages
+    if (project) {
+      const discordTasks = project.tasks.discord.tasks;
+      const socialTasks = project.tasks.social.tasks;
+      
+      const discordCompleted = discordTasks.filter(task => 
+        updatedProgress.tasks.find(t => t.taskId === task.id && (t.status === 'completed' || t.status === 'pending_approval'))
+      ).length;
+      
+      const socialCompleted = socialTasks.filter(task => 
+        updatedProgress.tasks.find(t => t.taskId === task.id && (t.status === 'completed' || t.status === 'pending_approval'))
+      ).length;
+
+      setProject({
+        ...project,
+        tasks: {
+          ...project.tasks,
+          discord: {
+            ...project.tasks.discord,
+            progress: Math.round((discordCompleted / discordTasks.length) * 100)
+          },
+          social: {
+            ...project.tasks.social,
+            progress: Math.round((socialCompleted / socialTasks.length) * 100)
+          }
+        }
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#1a1a18] flex items-center justify-center">
+        <div className="text-[#f5efdb] text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f5efdb] mx-auto mb-4"></div>
+          <p>Loading project details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#1a1a18] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-red-500 mb-4">{error}</div>
+          <Link
+            href="/dashboard/projects"
+            className="inline-block px-4 py-2 rounded-lg border border-[#f5efdb1a] text-[#f5efdb] hover:bg-[#f5efdb1a]"
+          >
+            Back to Projects
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-[#1a1a18] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-[#f5efdb] mb-4">Project not found</div>
+          <Link
+            href="/dashboard/projects"
+            className="inline-block px-4 py-2 rounded-lg border border-[#f5efdb1a] text-[#f5efdb] hover:bg-[#f5efdb1a]"
+          >
+            Back to Projects
+          </Link>
+        </div>
+      </div>
+    );
+  }
  
   return (
     <div className="min-h-screen bg-[#1a1a18]">
@@ -88,25 +467,27 @@ export default function ProjectDetailsPage() {
         {/* Project Header */}
         <div className="relative w-full h-[300px] rounded-xl overflow-hidden mb-8">
           <Image
-            src="/chronoforge-1ut4n.jpg"
-            alt="ChronoForge"
+            src={project.coverImage}
+            alt={project.name}
             fill
             style={{ objectFit: 'cover' }}
             priority
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
           <div className="absolute bottom-0 left-0 p-8">
-            <h1 className="text-4xl font-display text-[#f5efdb] mb-2">ChronoForge</h1>
+            <h1 className="text-4xl font-display text-[#f5efdb] mb-2">{project.name}</h1>
             <div className="flex gap-2">
               <span className="px-3 py-1 rounded-full text-sm text-[#f5efdb] bg-[#f5efdb1a] border border-[#f5efdb33]">
-                COMING SOON
+                {project.status.replace('_', ' ')}
               </span>
-              <span className="px-3 py-1 rounded-full text-sm text-purple-400 bg-purple-400/10">
-                RPG
-              </span>
-              <span className="px-3 py-1 rounded-full text-sm text-green-400 bg-green-400/10">
-                Multiplayer
-              </span>
+              {project.tags.map((tag, index) => (
+                <span 
+                  key={index}
+                  className="px-3 py-1 rounded-full text-sm text-purple-400 bg-purple-400/10"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -118,168 +499,167 @@ export default function ProjectDetailsPage() {
             <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
               <h2 className="text-2xl font-display text-[#f5efdb] mb-4">Overview</h2>
               <p className="text-[#f5efdb99] leading-relaxed">
-                ChronoForge is a radical multiplayer RPG that not only looks great but is also a global social experiment,
-                infused with AI playable companions & content, operating at hyperscale with thousands of players sharing
-                the battlefield in real time.
+                {project.overview.description}
               </p>
             </div>
  
-            {/* Totem NFTs */}
+            {/* NFT Details */}
             <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
-              <h2 className="text-2xl font-display text-[#f5efdb] mb-4">Totem NFTs</h2>
+              <h2 className="text-2xl font-display text-[#f5efdb] mb-4">{project.nftDetails.title}</h2>
               <p className="text-[#f5efdb99] mb-4">
-                Totems are ChronoForge's "battle pass on steroids" - loaded with different utilities and limited edition NFT drops!
+                {project.nftDetails.description}
               </p>
               <ul className="list-disc list-inside space-y-2 text-[#f5efdb99]">
-                <li>Instant NFT drops when burned including combat capable mounts, cosmetic outfits</li>
-                <li>Exclusive playable race unlocks (Koala & Saurian)</li>
-                <li>Up to +200% $CHRONO winnings from Season Ladder</li>
-                <li>Premium in-game currency (Forge Stamps)</li>
-                <li>Baby umu pet</li>
+                {project.nftDetails.features.map((feature, index) => (
+                  <li key={index}>{feature}</li>
+                ))}
               </ul>
-            </div>
- 
-            {/* Whitelist Requirements */}
-            <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-display text-[#f5efdb]">Tasks & Progress</h2>
-                <span className="text-[#f5efdb99]">0/2 Tasks Completed</span>
-              </div>
- 
-              {/* Discord Tasks Group */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-purple-400">👾</span>
-                    <h3 className="text-lg font-display text-[#f5efdb]">Discord Tasks</h3>
-                  </div>
-                  <span className="text-[#f5efdb99]">0%</span>
-                </div>
- 
-                {/* Task 1 */}
-                <div 
-                  className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
-                  onClick={() => handleTaskClick({
-                    title: 'Announce Battlepass Trailer',
-                    type: 'discord',
-                    points: 50
-                  })}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-[#f5efdb33]"></div>
-                      </div>
-                      <div>
-                        <h4 className="text-[#f5efdb] font-medium">Announce Battlepass Trailer</h4>
-                        <p className="text-[#f5efdb99] text-sm">Share the battlepass trailer in your Discord community</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-yellow-400 text-sm">+50 pts</span>
-                      <span className="text-[#f5efdb66] text-sm">3/20/2024</span>
-                    </div>
-                  </div>
-                </div>
- 
-                {/* Task 2 */}
-                <div 
-                  className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
-                  onClick={() => handleTaskClick({
-                    title: 'Mint Day Reminder',
-                    type: 'discord',
-                    points: 50
-                  })}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-[#f5efdb33]"></div>
-                      </div>
-                      <div>
-                        <h4 className="text-[#f5efdb] font-medium">Mint Day Reminder</h4>
-                        <p className="text-[#f5efdb99] text-sm">Post a reminder about the mint on February 24th</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-yellow-400 text-sm">+50 pts</span>
-                      <span className="text-[#f5efdb66] text-sm">2/24/2024</span>
-                    </div>
-                  </div>
-                </div>
- 
-                {/* Task 3 */}
-                <div 
-                  className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
-                  onClick={() => handleTaskClick({
-                    title: 'Join Discord Community',
-                    type: 'discord',
-                    points: 25
-                  })}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-[#f5efdb33]"></div>
-                      </div>
-                      <div>
-                        <h4 className="text-[#f5efdb] font-medium">Join Discord Community</h4>
-                        <p className="text-[#f5efdb99] text-sm">Join and verify in the ChronoForge Discord</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-yellow-400 text-sm">+25 pts</span>
-                      <span className="text-[#f5efdb66] text-sm">Now</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
- 
-              {/* Social Media Tasks Group */}
-              <div className="space-y-4 mt-8">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-blue-400">🐦</span>
-                    <h3 className="text-lg font-display text-[#f5efdb]">Social Media Tasks</h3>
-                  </div>
-                  <span className="text-[#f5efdb99]">0%</span>
-                </div>
- 
-                {/* Task 4 */}
-                <div 
-                  className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
-                  onClick={() => handleTaskClick({
-                    title: 'Retweet Announcement',
-                    type: 'social',
-                    points: 25
-                  })}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-[#f5efdb33]"></div>
-                      </div>
-                      <div>
-                        <h4 className="text-[#f5efdb] font-medium">Retweet Announcement</h4>
-                        <p className="text-[#f5efdb99] text-sm">Retweet the official battlepass announcement</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-yellow-400 text-sm">+25 pts</span>
-                      <span className="text-[#f5efdb66] text-sm">Now</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
  
             {/* How to Mint */}
             <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
               <h2 className="text-2xl font-display text-[#f5efdb] mb-4">How to Mint</h2>
               <ol className="list-decimal list-inside space-y-2 text-[#f5efdb99]">
-                <li>Make sure you have bridged funds to Abstract Chain</li>
-                <li>On 24th Feb head to <a href="https://mint.chronoforge.gg/" className="text-[#f5efdb] underline hover:opacity-80">mint.chronoforge.gg</a></li>
+                {project.howToMint.steps.map((step, index) => (
+                  <li key={index}>{step}</li>
+                ))}
               </ol>
+            </div>
+
+            {/* Tasks & Progress Section */}
+            <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-display text-[#f5efdb]">Tasks & Progress</h2>
+                <span className="text-[#f5efdb99]">
+                  {taskProgress ? (
+                    `${taskProgress.completedTasks || 0}/${(project.tasks?.discord?.tasks?.length || 0) + (project.tasks?.social?.tasks?.length || 0)} Tasks Completed`
+                  ) : '0/0 Tasks Completed'}
+                </span>
+              </div>
+
+              {/* Discord Tasks */}
+              <div className="space-y-4 mb-8">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-purple-400">👾</span>
+                    <h3 className="text-lg font-display text-[#f5efdb]">{project.tasks.discord.title}</h3>
+                  </div>
+                  <span className="text-[#f5efdb99]">{project.tasks.discord.progress}%</span>
+                </div>
+
+                {project.tasks.discord.tasks.map((task) => (
+                  <div 
+                    key={task.id}
+                    className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
+                    onClick={() => handleTaskClick({
+                      id: task.id,
+                      title: task.title,
+                      type: 'discord',
+                      points: task.points
+                    })}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center group relative">
+                          {(() => {
+                            const status = getTaskStatus(task.id);
+                            const statusDisplay = getTaskStatusDisplay(status);
+                            return (
+                              <>
+                                <div className={`rounded-full ${statusDisplay.color} ${statusDisplay.size}`}></div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-[#2a2a28] text-xs text-[#f5efdb] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {statusDisplay.tooltip}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div>
+                          <h4 className="text-[#f5efdb] font-medium">{task.title}</h4>
+                          <p className="text-[#f5efdb99] text-sm">{task.description}</p>
+                          
+                          {task.subtasks && task.subtasks.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {task.subtasks.map((subtask) => (
+                                <div key={subtask.id} className="flex items-center gap-2 text-sm">
+                                  <div className="w-3 h-3 rounded-full border border-[#f5efdb33] flex items-center justify-center">
+                                    {getSubtaskStatus(task.id, subtask.id) ? (
+                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                    ) : (
+                                      <div className="w-1 h-1 rounded-full bg-[#f5efdb33]"></div>
+                                    )}
+                                  </div>
+                                  <span className={`${getSubtaskStatus(task.id, subtask.id) ? 'text-[#f5efdb99] line-through' : 'text-[#f5efdb]'}`}>
+                                    {subtask.title}
+                                  </span>
+                                  {subtask.required && (
+                                    <span className="text-[#f5efdb66]">(Required)</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-yellow-400 text-sm">+{task.points} pts</span>
+                        <span className="text-[#f5efdb66] text-sm">{task.dueDate}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Social Media Tasks */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-400">🐦</span>
+                    <h3 className="text-lg font-display text-[#f5efdb]">{project.tasks.social.title}</h3>
+                  </div>
+                  <span className="text-[#f5efdb99]">{project.tasks.social.progress}%</span>
+                </div>
+
+                {project.tasks.social.tasks.map((task) => (
+                  <div 
+                    key={task.id}
+                    className="rounded-lg bg-[#2a2a2855] border border-[#f5efdb1a] p-4 cursor-pointer hover:bg-[#2a2a2877] transition-colors"
+                    onClick={() => handleTaskClick({
+                      id: task.id,
+                      title: task.title,
+                      type: 'social',
+                      points: task.points
+                    })}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full border border-[#f5efdb33] flex items-center justify-center group relative">
+                          {(() => {
+                            const status = getTaskStatus(task.id);
+                            const statusDisplay = getTaskStatusDisplay(status);
+                            return (
+                              <>
+                                <div className={`rounded-full ${statusDisplay.color} ${statusDisplay.size}`}></div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-[#2a2a28] text-xs text-[#f5efdb] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {statusDisplay.tooltip}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div>
+                          <h4 className="text-[#f5efdb] font-medium">{task.title}</h4>
+                          <p className="text-[#f5efdb99] text-sm">{task.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-yellow-400 text-sm">+{task.points} pts</span>
+                        <span className="text-[#f5efdb66] text-sm">{task.dueDate}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
  
@@ -291,15 +671,15 @@ export default function ProjectDetailsPage() {
               <div className="space-y-3">
                 <div>
                   <p className="text-[#f5efdb99] text-sm">Chain</p>
-                  <p className="text-[#f5efdb]">Abstract Chain</p>
+                  <p className="text-[#f5efdb]">{project.mintDetails.chain}</p>
                 </div>
                 <div>
                   <p className="text-[#f5efdb99] text-sm">Supply</p>
-                  <p className="text-[#f5efdb]">5000 Totems</p>
+                  <p className="text-[#f5efdb]">{project.mintDetails.supply}</p>
                 </div>
                 <div>
                   <p className="text-[#f5efdb99] text-sm">Mint Date</p>
-                  <p className="text-[#f5efdb]">February 24th, 2024</p>
+                  <p className="text-[#f5efdb]">{project.mintDetails.mintDate}</p>
                 </div>
               </div>
             </div>
@@ -308,14 +688,12 @@ export default function ProjectDetailsPage() {
             <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
               <h3 className="text-lg font-display text-[#f5efdb] mb-4">Mint Phases</h3>
               <div className="space-y-3">
-                <div>
-                  <p className="text-[#f5efdb99] text-sm">Whitelist FCFS</p>
-                  <p className="text-[#f5efdb]">4 hours - 5pm US EST</p>
-                </div>
-                <div>
-                  <p className="text-[#f5efdb99] text-sm">Public FCFS</p>
-                  <p className="text-[#f5efdb]">2 hours - 9pm US EST</p>
-                </div>
+                {project.mintDetails.phases.map((phase, index) => (
+                  <div key={index}>
+                    <p className="text-[#f5efdb99] text-sm">{phase.name}</p>
+                    <p className="text-[#f5efdb]">{phase.duration} - {phase.time}</p>
+                  </div>
+                ))}
               </div>
             </div>
  
@@ -323,22 +701,17 @@ export default function ProjectDetailsPage() {
             <div className="rounded-xl backdrop-blur-md bg-[#2a2a2833] border border-[#f5efdb1a] p-6">
               <h3 className="text-lg font-display text-[#f5efdb] mb-4">Important Links</h3>
               <div className="space-y-2">
-                <a 
-                  href="https://guide.chronoforge.gg/the-tokens/totem-nfts"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-[#f5efdb] hover:opacity-80"
-                >
-                  📖 Official Guide
-                </a>
-                <a 
-                  href="https://www.youtube.com/watch?v=O3WuqwAbEFg"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-[#f5efdb] hover:opacity-80"
-                >
-                  🎥 Explainer Video
-                </a>
+                {project.importantLinks.map((link, index) => (
+                  <a 
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[#f5efdb] hover:opacity-80"
+                  >
+                    {link.icon} {link.title}
+                  </a>
+                ))}
               </div>
             </div>
           </div>
@@ -349,20 +722,26 @@ export default function ProjectDetailsPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a18]/80 backdrop-blur-md border-t border-[#f5efdb1a] p-4 z-50">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0">
           <div>
-            <h3 className="text-[#f5efdb] font-display text-center sm:text-left">Want to collaborate with ChronoForge?</h3>
-            <p className="text-[#f5efdb99] text-center sm:text-left">Submit your application to become a partner</p>
+            <h3 className="text-[#f5efdb] font-display text-center sm:text-left">{project.collaboration.title}</h3>
+            <p className="text-[#f5efdb99] text-center sm:text-left">{project.collaboration.description}</p>
           </div>
           <div className="relative group">
             <button 
-              disabled
-              className="w-full sm:w-auto px-8 py-3 rounded-lg bg-[#f5efdb33] text-[#f5efdb66] cursor-not-allowed transition-all font-medium"
+              disabled={!project.collaboration.enabled}
+              className={`w-full sm:w-auto px-8 py-3 rounded-lg transition-all font-medium ${
+                project.collaboration.enabled
+                  ? 'bg-[#f5efdb] text-[#2a2a28] hover:opacity-90'
+                  : 'bg-[#f5efdb33] text-[#f5efdb66] cursor-not-allowed'
+              }`}
             >
               Collaborate Now
             </button>
-            <div className="absolute bottom-full mb-2 w-48 p-2 bg-[#2a2a28] border border-[#f5efdb1a] rounded-lg text-[#f5efdb99] text-sm text-center
-              opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              You can't collaborate until project is live
-            </div>
+            {!project.collaboration.enabled && (
+              <div className="absolute bottom-full mb-2 w-48 p-2 bg-[#2a2a28] border border-[#f5efdb1a] rounded-lg text-[#f5efdb99] text-sm text-center
+                opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {project.collaboration.disabledMessage}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -373,6 +752,7 @@ export default function ProjectDetailsPage() {
           isOpen={!!selectedTask}
           onClose={() => setSelectedTask(null)}
           task={selectedTask}
+          onTaskSubmitted={handleTaskSubmitted}
         />
       )}
     </div>

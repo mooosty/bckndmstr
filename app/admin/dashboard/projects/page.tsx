@@ -11,6 +11,10 @@ interface Project {
   status: 'COMING_SOON' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED';
   createdAt: string;
   updatedAt: string;
+  name: string;
+  overview?: {
+    description: string;
+  };
 }
 
 export default function ProjectsPage() {
@@ -55,12 +59,16 @@ export default function ProjectsPage() {
   }, []);
 
   const filteredProjects = projects
+    .filter(project => {
+      const searchTermLower = searchTerm.toLowerCase();
+      const name = project?.name || '';
+      const description = project?.overview?.description || '';
+      
+      return name.toLowerCase().includes(searchTermLower) ||
+             description.toLowerCase().includes(searchTermLower);
+    })
     .filter(project => 
-      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .filter(project => 
-      statusFilter === 'all' ? true : project.status === statusFilter
+      statusFilter === 'all' ? true : project?.status === statusFilter
     );
 
   const statusColors = {

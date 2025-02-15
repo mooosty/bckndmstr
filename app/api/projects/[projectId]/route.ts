@@ -8,70 +8,51 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { projectId: string } }
 ) {
+  // Log headers for debugging
+  console.log('Headers:', Object.fromEntries(request.headers.entries()));
+  
+  // Check for authorization header
+  const authHeader = request.headers.get('authorization');
+  console.log('Auth Header:', authHeader);
+  
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ 
+      error: 'Authentication required',
+      received_header: authHeader
+    }, { status: 401 });
+  }
+
+  // Get email from Bearer token
+  const userEmail = authHeader.split(' ')[1];
+  if (!userEmail || !userEmail.includes('@')) {
+    return NextResponse.json({ 
+      error: 'Invalid authentication token',
+      received_email: userEmail
+    }, { status: 401 });
+  }
+
   try {
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log(params.projectId)
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
     await dbConnect();
-
-    // Get user email from auth header
-    const authHeader = request.headers.get('authorization');
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log(authHeader)
-    console.log('--------------------------')
-    console.log('--------------------------')
-    console.log('--------------------------')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({
-        success: false,
-        message: 'Authentication required'
-      }, { status: 401 });
-    }
-
-    const userEmail = authHeader.split(' ')[1];
-    if (!userEmail || !userEmail.includes('@')) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid authentication token'
-      }, { status: 401 });
-    }
-
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(params.projectId)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid project ID format'
-      }, { status: 400 });
-    }
-
-    // Find project
-    const project = await Project.findById(new mongoose.Types.ObjectId(params.projectId)).exec();
+    
+    const project = await Project.findById(params.projectId);
+    
     if (!project) {
-      return NextResponse.json({
-        success: false,
-        message: 'Project not found'
+      return NextResponse.json({ 
+        error: 'Project not found'
       }, { status: 404 });
     }
 
+    // Transform project to match the schema
+    const plainProject = project.toObject();
+
     return NextResponse.json({
       success: true,
-      project
-    }, { status: 200 });
+      data: plainProject
+    });
   } catch (error) {
-    console.error('Error fetching project:', error);
-    return NextResponse.json({
-      success: false,
-      message: 'Failed to fetch project',
-      error: error instanceof Error ? error.message : 'Unknown error'
+    console.error('Error in GET /api/projects/[projectId]:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }
