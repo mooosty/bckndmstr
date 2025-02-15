@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
     const projects = await Project.find().sort({ createdAt: -1 });
 
     // Transform projects for response
-    const transformedProjects = projects.map((project: ProjectDocument) => {
-      const doc = project.toObject();
+    const transformedProjects = projects.map((project) => {
+      const doc = (project as IProject & { _id: Types.ObjectId }).toObject();
       return {
         id: doc._id.toString(),
         name: doc.name,
@@ -106,9 +106,9 @@ export async function POST(request: NextRequest) {
       status: data.status || 'COMING_SOON',
       createdAt: new Date(),
       updatedAt: new Date(),
-    }) as ProjectDocument;
+    });
 
-    const doc = project.toObject();
+    const doc = (project as IProject & { _id: Types.ObjectId }).toObject();
     return NextResponse.json({
       success: true,
       data: {
