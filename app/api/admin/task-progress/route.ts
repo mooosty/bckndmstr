@@ -29,9 +29,20 @@ export async function GET(request: NextRequest) {
     // Get all task progress entries
     const taskProgressList = await TaskProgress.find();
 
-    // Get all unique project IDs and user IDs
-    const projectIds = [...new Set(taskProgressList.map(tp => tp.projectId))];
-    const userIds = [...new Set(taskProgressList.map(tp => tp.userId))];
+    // Get unique project IDs and user IDs using Object.keys and reduce
+    const projectIds = Object.keys(
+      taskProgressList.reduce((acc, tp) => {
+        acc[tp.projectId] = true;
+        return acc;
+      }, {} as Record<string, boolean>)
+    );
+
+    const userIds = Object.keys(
+      taskProgressList.reduce((acc, tp) => {
+        acc[tp.userId] = true;
+        return acc;
+      }, {} as Record<string, boolean>)
+    );
 
     // Fetch all related projects and users
     const [projects, users] = await Promise.all([
@@ -75,7 +86,7 @@ export async function GET(request: NextRequest) {
             required: subtask.required
           }))
         };
-      }).filter(Boolean); // Remove null values
+      }).filter(Boolean);
     });
 
     return NextResponse.json({
