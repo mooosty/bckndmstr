@@ -1,89 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
+import Task, { ITask } from '@/src/models/Task';
 import Project from '@/src/models/Project';
 import User from '@/src/models/User';
 import TaskProgress from '@/src/models/TaskProgress';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('Starting task creation...');
-    
-    // Check for admin access
-    const adminAccess = request.cookies.get('adminAccess')?.value;
-    console.log('Admin access:', adminAccess);
-    
-    if (!adminAccess || adminAccess !== 'true') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
-
     // Check for authorization header
     const authHeader = request.headers.get('authorization');
-    console.log('Auth header:', authHeader);
-    
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Verify admin email
-    const adminEmail = authHeader.split(' ')[1];
-    console.log('Admin email:', adminEmail);
-    
-    if (adminEmail !== 'admin@darknightlabs.com') {
-      return NextResponse.json({ error: 'Invalid admin credentials' }, { status: 401 });
+    // Get user email from Bearer token
+    const userEmail = authHeader.split(' ')[1];
+    if (!userEmail || !userEmail.includes('@')) {
+      return NextResponse.json({ 
+        error: 'Invalid authentication token',
+        received_email: userEmail
+      }, { status: 401 });
     }
 
     await dbConnect();
     const data = await request.json();
-    console.log('Task data received:', data);
 
     // Validate required fields
-    if (!data.projectId || !data.title || !data.description || !data.deadline || !data.assignedTo) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Missing required fields. Required: projectId, title, description, deadline, assignedTo' 
-      }, { status: 400 });
+    const requiredFields = ['projectId', 'title', 'description', 'deadline', 'userId'];
+    for (const field of requiredFields) {
+      if (!data[field]) {
+        return NextResponse.json({ 
+          error: `${field} is required`,
+          receivedData: data
+        }, { status: 400 });
+      }
     }
 
-    // Verify project exists
-    const project = await Project.findById(data.projectId);
-    console.log('Project found:', project?._id);
-    
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    // Verify assigned user exists
-    const assignedUser = await User.findOne({ email: data.assignedTo });
-    console.log('Assigned user found:', assignedUser?._id);
-
-    if (!assignedUser) {
-      return NextResponse.json({ error: 'Assigned user not found' }, { status: 404 });
-    }
-
-    // Create new task in database
+    // Create task data
     const taskData = {
-      ...data,
-      userId: data.assignedTo, // Use the assigned user's email
-      createdBy: adminEmail, // Track who created the task
-      createdAt: new Date(),
-      updatedAt: new Date()
+      projectId: data.projectId,
+      title: data.title,
+      description: data.description,
+      deadline: data.deadline,
+      priority: data.priority || 'MEDIUM',
+      status: data.status || 'PENDING',
+      userId: data.userId,
+      createdBy: userEmail
     };
+
     console.log('Creating task with data:', taskData);
-    
+
     const task = await Task.create(taskData);
     console.log('Task created successfully:', task._id);
-    
+
     // Transform task for response
     const transformedTask = {
-      id: task._id.toString(),
-      title: task.title,
-      description: task.description,
-      projectId: task.projectId.toString(),
-      deadline: task.deadline,
-      priority: task.priority,
-      status: task.status,
-      assignedTo: task.userId,
-      createdBy: task.createdBy,
+      id: task._id,
+      ...task.toObject(),
       createdAt: task.createdAt,
       updatedAt: task.updatedAt
     };
@@ -91,146 +64,75 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: true,
       message: "Task created successfully",
-      data: transformedTask
+      task: transformedTask
     });
+
   } catch (error) {
-    console.error('Task creation error details:', error);
-    // Log validation errors if present
-    if (error instanceof Error && 'errors' in (error as any)) {
-      console.error('Validation errors:', (error as any).errors);
+    console.error('Task creation error:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
     }
     return NextResponse.json({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to create task',
-      details: error instanceof Error ? error.stack : undefined,
-      validationErrors: error instanceof Error && 'errors' in (error as any) ? (error as any).errors : undefined
+      error: 'Failed to create task',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(request: NextRequest) {
   try {
     // Check for authorization header
-    const authHeader = req.headers.get('authorization');
+    const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    // Get user email from Bearer token
     const userEmail = authHeader.split(' ')[1];
-    if (!userEmail) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid authorization token' },
-        { status: 401 }
-      );
+    if (!userEmail || !userEmail.includes('@')) {
+      return NextResponse.json({ 
+        error: 'Invalid authentication token',
+        received_email: userEmail
+      }, { status: 401 });
     }
 
-    // Connect to database
     await dbConnect();
+    
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get('projectId');
+    const userId = searchParams.get('userId');
+    
+    // Build query
+    const query: any = {};
+    if (projectId) query.projectId = projectId;
+    if (userId) query.userId = userId;
 
-    // If admin, fetch all task progress
-    if (userEmail === 'admin@darknightlabs.com') {
-      const taskProgressList = await TaskProgress.find();
-      const projectIds = [...new Set(taskProgressList.map(tp => tp.projectId))];
-      const projects = await Project.find({ _id: { $in: projectIds } });
-      const projectMap = new Map(projects.map(p => [p._id.toString(), p.name]));
+    const tasks = await Task.find(query).sort({ createdAt: -1 });
+    
+    // Transform tasks
+    const transformedTasks = tasks.map(task => ({
+      id: task._id,
+      ...task.toObject(),
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt
+    }));
 
-      const tasks = taskProgressList.flatMap(progress => {
-        return progress.tasks.map(task => {
-          // Find the corresponding project
-          const project = projects.find(p => p._id.toString() === progress.projectId);
-          if (!project) return null;
-
-          // Find the task details from the project
-          const taskDetails = project.tasks.discord.tasks.find(t => t.id === task.taskId) ||
-                            project.tasks.social.tasks.find(t => t.id === task.taskId);
-          if (!taskDetails) return null;
-
-          return {
-            taskId: task.taskId,
-            projectId: progress.projectId,
-            projectName: projectMap.get(progress.projectId) || 'Unknown Project',
-            title: taskDetails.title,
-            description: taskDetails.description,
-            type: task.type,
-            status: task.status,
-            points: taskDetails.points,
-            dueDate: taskDetails.dueDate,
-            submission: task.submission,
-            completedAt: task.completedAt,
-            subtasks: taskDetails.subtasks?.map(subtask => ({
-              subtaskId: subtask.id,
-              title: subtask.title,
-              completed: task.subtasks?.find(s => s.subtaskId === subtask.id)?.completed || false,
-              required: subtask.required
-            }))
-          };
-        }).filter(Boolean);
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: tasks
-      });
-    }
-
-    // For regular users, find their task progress
-    const taskProgressList = await TaskProgress.find({ userId: userEmail });
-
-    // Get all unique project IDs from the task progress
-    const projectIds = [...new Set(taskProgressList.map(tp => tp.projectId))];
-
-    // Fetch all projects
-    const projects = await Project.find({ _id: { $in: projectIds } });
-
-    // Create a map of project IDs to project names
-    const projectMap = new Map(projects.map(p => [p._id.toString(), p.name]));
-
-    // Transform the data to include project names and all task details
-    const tasks = taskProgressList.flatMap(progress => {
-      return progress.tasks.map(task => {
-        // Find the corresponding project
-        const project = projects.find(p => p._id.toString() === progress.projectId);
-        if (!project) return null;
-
-        // Find the task details from the project
-        const taskDetails = project.tasks.discord.tasks.find(t => t.id === task.taskId) ||
-                          project.tasks.social.tasks.find(t => t.id === task.taskId);
-        if (!taskDetails) return null;
-
-        return {
-          taskId: task.taskId,
-          projectId: progress.projectId,
-          projectName: projectMap.get(progress.projectId) || 'Unknown Project',
-          title: taskDetails.title,
-          description: taskDetails.description,
-          type: task.type,
-          status: task.status,
-          points: taskDetails.points,
-          dueDate: taskDetails.dueDate,
-          submission: task.submission,
-          completedAt: task.completedAt,
-          subtasks: taskDetails.subtasks?.map(subtask => ({
-            subtaskId: subtask.id,
-            title: subtask.title,
-            completed: task.subtasks?.find(s => s.subtaskId === subtask.id)?.completed || false,
-            required: subtask.required
-          }))
-        };
-      }).filter(Boolean); // Remove null values
-    });
-
-    return NextResponse.json({
+    return NextResponse.json({ 
       success: true,
-      data: tasks
+      data: transformedTasks
     });
+
   } catch (error) {
     console.error('Error fetching tasks:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch tasks' },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to fetch tasks' 
+    }, { status: 500 });
   }
 } 

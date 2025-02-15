@@ -3,6 +3,36 @@ import dbConnect from '@/lib/db';
 import TaskProgress from '@/src/models/TaskProgress';
 import Project from '@/src/models/Project';
 
+interface ProjectSubtask {
+  id: string;
+  title: string;
+  required: boolean;
+}
+
+interface ProjectTask {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  dueDate: string;
+  subtasks?: ProjectSubtask[];
+}
+
+interface TaskProgressSubtask {
+  subtaskId: string;
+  completed: boolean;
+  completedAt?: Date;
+}
+
+interface TaskProgressItem {
+  taskId: string;
+  type: 'discord' | 'social';
+  status: 'pending' | 'completed';
+  completedAt?: Date;
+  submission?: string;
+  subtasks?: TaskProgressSubtask[];
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { projectId: string } }
@@ -93,8 +123,11 @@ export async function POST(
     projectObj = project.toObject();
 
     // Find the task in project
-    const taskList = type === 'discord' ? projectObj.tasks?.discord?.tasks : projectObj.tasks?.social?.tasks;
-    const projectTask = taskList?.find(t => t.id === taskId);
+    const taskList: ProjectTask[] = type === 'discord' 
+      ? (projectObj.tasks?.discord?.tasks || []) 
+      : (projectObj.tasks?.social?.tasks || []);
+
+    const projectTask = taskList.find((t) => t.id === taskId);
     if (!projectTask) {
       return NextResponse.json({ 
         success: false,
@@ -111,7 +144,7 @@ export async function POST(
     if (!progress) {
       // Initialize progress with all project tasks
       const initialTasks = [
-        ...(projectObj.tasks?.discord?.tasks || []).map(task => ({
+        ...(projectObj.tasks?.discord?.tasks || []).map((task: ProjectTask) => ({
           taskId: task.id,
           type: 'discord' as const,
           status: 'pending' as const,
@@ -120,7 +153,7 @@ export async function POST(
             completed: false
           })) || []
         })),
-        ...(projectObj.tasks?.social?.tasks || []).map(task => ({
+        ...(projectObj.tasks?.social?.tasks || []).map((task: ProjectTask) => ({
           taskId: task.id,
           type: 'social' as const,
           status: 'pending' as const
@@ -211,7 +244,7 @@ export async function POST(
       discord: {
         title: projectObj.tasks?.discord?.title || '',
         description: projectObj.tasks?.discord?.description || '',
-        tasks: (projectObj.tasks?.discord?.tasks || []).map(task => ({
+        tasks: (projectObj.tasks?.discord?.tasks || []).map((task: ProjectTask) => ({
           ...task,
           progress: progressObj.tasks.find(t => t.taskId === task.id)
         }))
@@ -219,7 +252,7 @@ export async function POST(
       social: {
         title: projectObj.tasks?.social?.title || '',
         description: projectObj.tasks?.social?.description || '',
-        tasks: (projectObj.tasks?.social?.tasks || []).map(task => ({
+        tasks: (projectObj.tasks?.social?.tasks || []).map((task: ProjectTask) => ({
           ...task,
           progress: progressObj.tasks.find(t => t.taskId === task.id)
         }))

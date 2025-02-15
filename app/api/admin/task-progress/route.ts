@@ -1,8 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import TaskProgress from '@/src/models/TaskProgress';
-import Project from '@/src/models/Project';
+import Project, { IProject } from '@/src/models/Project';
 import User from '@/src/models/User';
+import { Document, Types } from 'mongoose';
+
+interface ProjectSubtask {
+  id: string;
+  title: string;
+  required: boolean;
+}
+
+interface ProjectTask {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  dueDate: string;
+  subtasks?: ProjectSubtask[];
+}
+
+interface TaskProgressSubtask {
+  subtaskId: string;
+  completed: boolean;
+  completedAt?: Date;
+}
+
+interface TaskProgressItem {
+  taskId: string;
+  type: 'discord' | 'social';
+  status: 'pending' | 'completed';
+  completedAt?: Date;
+  submission?: string;
+  subtasks?: TaskProgressSubtask[];
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +82,12 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Create maps for quick lookups
-    const projectMap = new Map(projects.map(p => [p._id.toString(), p]));
+    const projectMap = new Map(
+      projects.map((p) => {
+        const doc = (p as IProject & { _id: Types.ObjectId }).toObject();
+        return [doc._id.toString(), doc];
+      })
+    );
     const userMap = new Map(users.map(u => [u.email, u]));
 
     // Transform the data to include project and user details
@@ -59,10 +95,10 @@ export async function GET(request: NextRequest) {
       const project = projectMap.get(progress.projectId);
       if (!project) return [];
 
-      return progress.tasks.map(task => {
+      return progress.tasks.map((task: TaskProgressItem) => {
         // Find the task details from the project
-        const taskDetails = project.tasks.discord.tasks.find(t => t.id === task.taskId) ||
-                          project.tasks.social.tasks.find(t => t.id === task.taskId);
+        const taskDetails = project.tasks.discord.tasks.find((t: ProjectTask) => t.id === task.taskId) ||
+                          project.tasks.social.tasks.find((t: ProjectTask) => t.id === task.taskId);
         if (!taskDetails) return null;
 
         return {
@@ -79,10 +115,10 @@ export async function GET(request: NextRequest) {
           dueDate: taskDetails.dueDate,
           submission: task.submission,
           completedAt: task.completedAt,
-          subtasks: taskDetails.subtasks?.map(subtask => ({
+          subtasks: taskDetails.subtasks?.map((subtask: ProjectSubtask) => ({
             subtaskId: subtask.id,
             title: subtask.title,
-            completed: task.subtasks?.find(s => s.subtaskId === subtask.id)?.completed || false,
+            completed: task.subtasks?.find((s: TaskProgressSubtask) => s.subtaskId === subtask.id)?.completed || false,
             required: subtask.required
           }))
         };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { projectController } from '../../../controllers/projectController';
+import projectController from '../../../controllers/projectController';
 import { userAuth } from '../../../middleware/userAuth';
 import { adminAuth } from '../../../middleware/adminAuth';
 import dbConnect from '@/lib/db';
@@ -8,11 +8,39 @@ import dbConnect from '@/lib/db';
 dbConnect();
 
 // List projects (requires user auth)
-export const GET = userAuth(async (request: NextRequest, context: { params: {} }) => {
-  return projectController.getAll();
-});
+export async function GET(request: NextRequest) {
+  try {
+    // Authenticate user
+    const authResult = await userAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    return projectController.getAll();
+  } catch (error) {
+    console.error('Error in GET /api/projects:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
 
 // Create project (requires admin auth)
-export const POST = adminAuth(async (request: NextRequest) => {
-  return projectController.create(request);
-}); 
+export async function POST(request: NextRequest) {
+  try {
+    // Authenticate admin
+    const authResult = await adminAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    return projectController.create(request);
+  } catch (error) {
+    console.error('Error in POST /api/projects:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+} 

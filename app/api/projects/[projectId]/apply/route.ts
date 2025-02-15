@@ -4,10 +4,22 @@ import dbConnect from '@/lib/db';
 import Project from '@/models/Project';
 import Application from '@/src/models/Application';
 
-export const POST = userAuth(async (request: NextRequest, context: { params: { projectId: string } }) => {
+export async function POST(
+  request: NextRequest,
+  context: { params: { projectId: string } }
+) {
   try {
+    // Authenticate user
+    const authResult = await userAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
     await dbConnect();
-    const userEmail = request.headers.get('authorization')?.split(' ')[1];
+    const userEmail = authResult.user.email;
 
     // Check if project exists and is open for applications
     const project = await Project.findById(context.params.projectId);
@@ -67,4 +79,4 @@ export const POST = userAuth(async (request: NextRequest, context: { params: { p
       message: 'Failed to submit application'
     }, { status: 500 });
   }
-}); 
+} 

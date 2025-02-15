@@ -3,13 +3,22 @@ import { userAuth } from '../../../../../../../middleware/userAuth';
 import dbConnect from '@/lib/db';
 import Task from '@/models/Task';
 
-export const POST = userAuth(async (
+export async function POST(
   request: NextRequest,
   context: { params: { projectId: string; taskId: string } }
-) => {
+) {
   try {
+    // Authenticate user
+    const authResult = await userAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
     await dbConnect();
-    const userEmail = request.headers.get('authorization')?.split(' ')[1];
+    const userEmail = authResult.user.email;
     const { link, description } = await request.json();
     const { projectId, taskId } = context.params;
 
@@ -57,4 +66,4 @@ export const POST = userAuth(async (
       message: 'Failed to submit task'
     }, { status: 500 });
   }
-}); 
+} 

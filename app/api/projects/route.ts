@@ -1,6 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import Project from '@/src/models/Project';
+import Project, { IProject } from '@/src/models/Project';
+import { Types } from 'mongoose';
+
+interface DiscordSubtask {
+  id: string;
+  title: string;
+  required: boolean;
+}
+
+interface DiscordTask {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  dueDate: string;
+  subtasks?: DiscordSubtask[];
+}
+
+interface SocialTask {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  dueDate: string;
+}
+
+interface ProjectData {
+  name: string;
+  coverImage: string;
+  status: string;
+  tags: string[];
+  overview: {
+    description: string;
+  };
+  nftDetails: {
+    title: string;
+    description: string;
+    features: string[];
+  };
+  mintDetails: {
+    chain: string;
+    supply: string;
+    mintDate: string;
+    phases: Array<{
+      name: string;
+      duration: string;
+      time: string;
+    }>;
+  };
+  howToMint: {
+    steps: string[];
+  };
+  importantLinks: Array<{
+    title: string;
+    url: string;
+    icon: string;
+  }>;
+  collaboration: {
+    enabled: boolean;
+    title: string;
+    description: string;
+    disabledMessage: string;
+  };
+  tasks: {
+    discord: {
+      title: string;
+      description: string;
+      tasks: DiscordTask[];
+      progress: number;
+    };
+    social: {
+      title: string;
+      description: string;
+      tasks: SocialTask[];
+      progress: number;
+    };
+  };
+  [key: string]: any;
+}
 
 export async function GET(request: NextRequest) {
   // Log headers for debugging
@@ -32,7 +110,7 @@ export async function GET(request: NextRequest) {
     
     // Transform projects to match the new schema
     const transformedProjects = projects.map(project => {
-      const plainProject = project.toObject();
+      const plainProject = (project as IProject & { _id: Types.ObjectId }).toObject();
       return {
         id: plainProject._id.toString(),
         name: plainProject.name || plainProject.title || '',
@@ -152,20 +230,20 @@ export async function POST(request: NextRequest) {
       nftDetails: {
         title: data.nftDetails?.title || '',
         description: data.nftDetails?.description || '',
-        features: data.nftDetails?.features?.filter(f => f.trim() !== '') || []
+        features: data.nftDetails?.features?.filter((f: string) => f.trim() !== '') || []
       },
       mintDetails: {
         chain: data.mintDetails?.chain || '',
         supply: data.mintDetails?.supply || '',
         mintDate: data.mintDetails?.mintDate || '',
-        phases: data.mintDetails?.phases?.filter(p => 
+        phases: data.mintDetails?.phases?.filter((p: { name: string; duration: string; time: string; }) => 
           p.name.trim() !== '' || p.duration.trim() !== '' || p.time.trim() !== ''
         ) || []
       },
       howToMint: {
-        steps: data.howToMint?.steps?.filter(s => s.trim() !== '') || []
+        steps: data.howToMint?.steps?.filter((s: string) => s.trim() !== '') || []
       },
-      importantLinks: data.importantLinks?.filter(l => 
+      importantLinks: data.importantLinks?.filter((l: { title: string; url: string; icon: string; }) => 
         l.title.trim() !== '' || l.url.trim() !== '' || l.icon.trim() !== ''
       ) || [],
       collaboration: {
@@ -178,13 +256,13 @@ export async function POST(request: NextRequest) {
         discord: {
           title: data.tasks?.discord?.title || 'Discord Tasks',
           description: data.tasks?.discord?.description || 'Complete Discord community tasks',
-          tasks: data.tasks?.discord?.tasks?.map(task => ({
+          tasks: data.tasks?.discord?.tasks?.map((task: DiscordTask) => ({
             id: task.id,
             title: task.title,
             description: task.description,
             points: task.points,
             dueDate: task.dueDate,
-            subtasks: task.subtasks?.map(subtask => ({
+            subtasks: task.subtasks?.map((subtask: DiscordSubtask) => ({
               id: subtask.id,
               title: subtask.title,
               required: subtask.required
@@ -195,7 +273,7 @@ export async function POST(request: NextRequest) {
         social: {
           title: data.tasks?.social?.title || 'Social Media Tasks',
           description: data.tasks?.social?.description || 'Complete social media engagement tasks',
-          tasks: data.tasks?.social?.tasks?.map(task => ({
+          tasks: data.tasks?.social?.tasks?.map((task: SocialTask) => ({
             id: task.id,
             title: task.title,
             description: task.description,
@@ -232,11 +310,11 @@ export async function POST(request: NextRequest) {
         if ('errors' in dbError) {
           console.error('Validation errors:', JSON.stringify(dbError.errors, null, 2));
           // Format validation errors for better readability
-          const formattedErrors = {};
+          const formattedErrors: Record<string, any> = {};
           Object.entries(dbError.errors || {}).forEach(([path, error]: [string, any]) => {
             // Get the nested path value
             const pathParts = path.split('.');
-            let value = projectData;
+            let value: any = projectData as ProjectData;
             for (const part of pathParts) {
               value = value?.[part];
             }

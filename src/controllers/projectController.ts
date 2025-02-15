@@ -4,12 +4,41 @@ import Project, { IProject } from '../models/Project';
 import dbConnect from '@/lib/db';
 
 class ProjectController {
+  // Update project status
+  async updateStatus(id: string, req: NextRequest) {
+    try {
+      await dbConnect();
+      const data = await req.json();
+      
+      if (!data.status) {
+        return apiResponse.error('Status is required', 400);
+      }
+
+      // Validate status
+      const validStatuses = ['COMING_SOON', 'LIVE', 'ENDED'];
+      if (!validStatuses.includes(data.status)) {
+        return apiResponse.error('Invalid status. Must be one of: ' + validStatuses.join(', '), 400);
+      }
+
+      const project = await Project.findById(id);
+      if (!project) {
+        return apiResponse.error('Project not found', 404);
+      }
+
+      project.status = data.status;
+      await project.save();
+
+      return apiResponse.success(project, 'Project status updated successfully');
+    } catch (error) {
+      return apiResponse.serverError(error);
+    }
+  }
+
   // Create a new project
   async create(req: NextRequest) {
     try {
       await dbConnect();
       const data = await req.json();
-      console.log('Received project data:', JSON.stringify(data, null, 2));
 
       // Validate required fields
       const requiredFields = [
@@ -26,54 +55,17 @@ class ProjectController {
       for (const field of requiredFields) {
         const value = field.split('.').reduce((obj, key) => obj?.[key], data);
         if (!value) {
-          console.log(`Missing required field: ${field}`);
-          return apiResponse.badRequest(`${field} is required`);
+          return apiResponse.error(`${field} is required`, 400);
         }
       }
 
-      // Create project with defaults for optional fields
-      const projectData = {
+      const project = await Project.create({
         ...data,
-        status: data.status || 'COMING_SOON',
-        tags: data.tags || [],
-        nftDetails: {
-          ...data.nftDetails,
-          features: data.nftDetails?.features || []
-        },
-        mintDetails: {
-          ...data.mintDetails,
-          phases: data.mintDetails?.phases || []
-        },
-        howToMint: {
-          steps: data.howToMint?.steps || []
-        },
-        importantLinks: data.importantLinks || [],
-        collaboration: {
-          enabled: data.collaboration?.enabled || false,
-          title: data.collaboration?.title || 'Want to collaborate?',
-          description: data.collaboration?.description || 'Submit your application to become a partner',
-          disabledMessage: data.collaboration?.disabledMessage || 'You can\'t collaborate until project is live'
-        }
-      };
-
-      console.log('Processed project data:', JSON.stringify(projectData, null, 2));
-
-      const project = await Project.create(projectData);
-      console.log('Created project:', project);
+        status: data.status || 'COMING_SOON'
+      });
       
       return apiResponse.success(project, 'Project created successfully');
     } catch (error) {
-      console.error('Project creation error:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        if ('errors' in error) {
-          console.error('Validation errors:', error.errors);
-        }
-      }
       return apiResponse.serverError(error);
     }
   }
@@ -95,7 +87,7 @@ class ProjectController {
       await dbConnect();
       const project = await Project.findById(id);
       if (!project) {
-        return apiResponse.notFound('Project not found');
+        return apiResponse.error('Project not found', 404);
       }
       return apiResponse.success(project);
     } catch (error) {
@@ -111,7 +103,7 @@ class ProjectController {
       
       const project = await Project.findById(id);
       if (!project) {
-        return apiResponse.notFound('Project not found');
+        return apiResponse.error('Project not found', 404);
       }
 
       // Update only the fields that are provided
@@ -153,7 +145,7 @@ class ProjectController {
       await dbConnect();
       const project = await Project.findByIdAndDelete(id);
       if (!project) {
-        return apiResponse.notFound('Project not found');
+        return apiResponse.error('Project not found', 404);
       }
       return apiResponse.success(null, 'Project deleted successfully');
     } catch (error) {

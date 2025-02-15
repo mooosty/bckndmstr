@@ -14,7 +14,10 @@ interface Task {
   status: 'pending' | 'pending_approval' | 'completed';
   points: number;
   dueDate: string;
-  submission?: string;
+  submission?: {
+    link: string;
+    description: string;
+  };
   completedAt?: string;
   subtasks?: {
     subtaskId: string;
@@ -239,7 +242,14 @@ export default function TasksPage() {
                   <div className="text-[#f5efdb66] text-sm">{task.dueDate}</div>
                   {task.submission && (
                     <div className="text-[#f5efdb99] text-sm truncate max-w-[200px]">
-                      Submission: {task.submission}
+                      <a 
+                        href={task.submission.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#f5efdb] hover:underline"
+                      >
+                        {task.submission.description}
+                      </a>
                     </div>
                   )}
                 </div>
