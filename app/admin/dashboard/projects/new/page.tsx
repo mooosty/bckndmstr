@@ -72,6 +72,21 @@ interface ProjectFormData {
   };
 }
 
+type SectionPath = 
+  | 'overview'
+  | 'nftDetails'
+  | 'mintDetails'
+  | 'howToMint'
+  | 'importantLinks'
+  | 'collaboration'
+  | 'tasks';
+
+type ArrayFieldPath = 
+  | 'features'
+  | 'phases'
+  | 'steps'
+  | 'links';
+
 export default function NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -237,45 +252,64 @@ export default function NewProjectPage() {
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
-    section?: string,
+    section?: SectionPath,
     index?: number,
-    field?: string
+    field?: string | ArrayFieldPath
   ) => {
     const { name, value } = e.target;
 
-    if (section && typeof index === 'number' && field) {
-      // Handle array fields (features, phases, links)
-      setFormData(prev => {
-        const newData = { ...prev };
-        if (section === 'nftDetails.features') {
-          newData.nftDetails.features[index] = value;
-        } else if (section === 'mintDetails.phases') {
-          newData.mintDetails.phases[index] = {
-            ...newData.mintDetails.phases[index],
-            [field]: value
-          };
-        } else if (section === 'howToMint.steps') {
-          newData.howToMint.steps[index] = value;
-        } else if (section === 'importantLinks') {
-          newData.importantLinks[index] = {
-            ...newData.importantLinks[index],
-            [field]: value
-          };
+    if (section === 'nftDetails' && typeof index === 'number' && field === 'features') {
+      // Handle nftDetails.features array
+      setFormData(prev => ({
+        ...prev,
+        nftDetails: {
+          ...prev.nftDetails,
+          features: prev.nftDetails.features.map((item, i) => i === index ? value : item)
         }
-        return newData;
-      });
+      }));
+    } else if (section === 'mintDetails' && typeof index === 'number' && field) {
+      // Handle mintDetails.phases array
+      setFormData(prev => ({
+        ...prev,
+        mintDetails: {
+          ...prev.mintDetails,
+          phases: prev.mintDetails.phases.map((phase, i) => 
+            i === index ? { ...phase, [field]: value } : phase
+          )
+        }
+      }));
+    } else if (section === 'howToMint' && typeof index === 'number' && field === 'steps') {
+      // Handle howToMint.steps array
+      setFormData(prev => ({
+        ...prev,
+        howToMint: {
+          ...prev.howToMint,
+          steps: prev.howToMint.steps.map((step, i) => i === index ? value : step)
+        }
+      }));
+    } else if (section === 'importantLinks' && typeof index === 'number' && field) {
+      // Handle importantLinks array
+      setFormData(prev => ({
+        ...prev,
+        importantLinks: prev.importantLinks.map((link, i) => 
+          i === index ? { ...link, [field]: value } : link
+        )
+      }));
     } else if (section) {
-      // Handle nested objects (overview, nftDetails, etc.)
+      // Handle nested objects
       setFormData(prev => ({
         ...prev,
         [section]: {
           ...prev[section],
-          [name]: value,
-        },
+          [name]: value
+        }
       }));
     } else {
       // Handle top-level fields
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
     }
   };
 
@@ -628,7 +662,7 @@ export default function NewProjectPage() {
                     <input
                       type="text"
                       value={feature}
-                      onChange={(e) => handleChange(e, 'nftDetails.features', index, 'value')}
+                      onChange={(e) => handleChange(e, 'nftDetails', index, 'features')}
                       className="flex-1 px-4 py-3 rounded-lg bg-[#1e1e1c] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                       placeholder="Enter feature"
                     />
@@ -719,21 +753,21 @@ export default function NewProjectPage() {
                     <input
                       type="text"
                       value={phase.name}
-                      onChange={(e) => handleChange(e, 'mintDetails.phases', index, 'name')}
+                      onChange={(e) => handleChange(e, 'mintDetails', index, 'name')}
                       className="w-full px-4 py-2 rounded-lg bg-[#2a2a2866] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                       placeholder="Phase Name"
                     />
                     <input
                       type="text"
                       value={phase.duration}
-                      onChange={(e) => handleChange(e, 'mintDetails.phases', index, 'duration')}
+                      onChange={(e) => handleChange(e, 'mintDetails', index, 'duration')}
                       className="w-full px-4 py-2 rounded-lg bg-[#2a2a2866] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                       placeholder="Duration (e.g., 4 hours)"
                     />
                     <input
                       type="text"
                       value={phase.time}
-                      onChange={(e) => handleChange(e, 'mintDetails.phases', index, 'time')}
+                      onChange={(e) => handleChange(e, 'mintDetails', index, 'time')}
                       className="w-full px-4 py-2 rounded-lg bg-[#2a2a2866] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                       placeholder="Time (e.g., 5pm US EST)"
                     />
@@ -762,7 +796,7 @@ export default function NewProjectPage() {
                     <input
                       type="text"
                       value={step}
-                      onChange={(e) => handleChange(e, 'howToMint.steps', index, 'value')}
+                      onChange={(e) => handleChange(e, 'howToMint', index, 'steps')}
                       className="flex-1 px-4 py-3 rounded-lg bg-[#1e1e1c] border border-[#f5efdb1a] text-[#f5efdb] placeholder-[#f5efdb66] focus:outline-none focus:border-[#f5efdb33]"
                       placeholder="Enter step"
                     />
