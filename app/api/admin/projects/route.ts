@@ -1,37 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import Project from '@/src/models/Project';
-import { Types } from 'mongoose';
-
-interface ProjectDocument {
-  _id: Types.ObjectId;
-  title: string;
-  description: string;
-  status: string;
-  imageUrl: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import Project, { IProject } from '@/src/models/Project';
 
 export async function GET(request: NextRequest) {
   try {
-    // Check admin access
-    const adminAccess = request.cookies.get('adminAccess');
-    if (!adminAccess || adminAccess.value !== 'true') {
+    // Check for admin access
+    const adminAccess = request.cookies.get('adminAccess')?.value;
+    if (!adminAccess || adminAccess !== 'true') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    // Check for authorization header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Verify admin email
+    const adminEmail = authHeader.split(' ')[1];
+    if (adminEmail !== 'admin@darknightlabs.com') {
+      return NextResponse.json({ error: 'Invalid admin credentials' }, { status: 401 });
+    }
+
     await dbConnect();
-    
-    const projects = await Project.find({});
+    const projects = await Project.find().sort({ createdAt: -1 });
 
     // Transform projects for response
-    const transformedProjects = projects.map((project: ProjectDocument) => ({
+    const transformedProjects = projects.map((project) => ({
       id: project._id.toString(),
-      title: project.title,
-      description: project.description,
+      name: project.name,
+      overview: {
+        description: project.overview.description
+      },
+      coverImage: project.coverImage,
       status: project.status,
-      imageUrl: project.imageUrl,
+      tags: project.tags,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString()
     }));
@@ -41,10 +44,9 @@ export async function GET(request: NextRequest) {
       data: transformedProjects
     });
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    console.error('Error fetching admin projects:', error);
     return NextResponse.json({ 
-      success: false, 
-      error: 'Failed to fetch projects' 
+      error: 'Failed to fetch admin projects' 
     }, { status: 500 });
   }
 }
